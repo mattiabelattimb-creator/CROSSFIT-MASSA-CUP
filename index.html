@@ -328,11 +328,11 @@
                         <div class="text-xs font-bold text-blue-400 mb-1">GIUDICE #${i}</div>
                         <div class="text-sm font-bold text-white truncate">${jData.athleteName}</div>
                         <div class="text-xs text-gray-400 truncate">${jData.wodName}</div>
-                        <div class="text-lg font-black text-green-400 mt-1">${val}`;
+                        <div class="text-lg font-black text-green-400 mt-1">${val}</div>`;
                 } else {
                     jCard.innerHTML = `
                         <div class="text-xs font-bold text-gray-500 mb-1">GIUDICE #${i}</div>
-                        <div class="text-xs text-gray-600 tn-2">Inattivo</div>
+                        <div class="text-xs text-gray-600 mt-2">Inattivo</div>
                     `;
                 }
                 judgesGrid.appendChild(jCard);
@@ -341,7 +341,7 @@
 
         initWodTabs();
         fetchFirebaseData();
-        setInterval(fetchFirebaseData, 1500);
+        setInterval(fetchFirebaseData, 500);
     </script>
 </body>
 </html>
