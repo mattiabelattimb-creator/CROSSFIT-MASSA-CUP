@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CROSSFIT MASSA - LIVE LEADERBOARD & ARENA</title>
+    <title>CROSSFIT MASSA CUP - LIVE LEADERBOARD & ARENA</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Chart.js -->
@@ -26,7 +26,7 @@
     <header class="flex flex-col md:flex-row justify-between items-center pb-6 mb-8 border-b border-gray-800 gap-4">
         <div>
             <h1 class="text-3xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-500 to-orange-500 tracking-wider">
-                ⚡ CROSSFIT MASSA ARENA ⚡
+                ⚡ CROSSFIT MASSA CUP ⚡
             </h1>
             <p class="text-gray-400 text-sm md:text-base mt-1">Live Leaderboard & Giudici in Tempo Reale (Diretta Firebase)</p>
         </div>
@@ -76,7 +76,7 @@
 
     <!-- Footer -->
     <footer class="mt-12 text-center text-gray-500 text-sm">
-        CrossFit Massa Live Arena &bull; Sincronizzato direttamente con Firebase Realtime Database
+        CrossFit Massa Cup Live Arena &bull; Sincronizzato con Firebase Realtime Database
     </footer>
 
     <script>
@@ -92,7 +92,7 @@
             data: {
                 labels: [],
                 datasets: [{
-                    label: 'Punteggio',
+                    label: 'Punteggio / Punti',
                     data: [],
                     backgroundColor: teamColors,
                     borderRadius: 8
@@ -132,7 +132,6 @@
                 container.appendChild(btn);
             }
 
-            // General Leaderboard Tab (After WOD 12)
             const genBtn = document.createElement('button');
             genBtn.className = `px-5 py-2 rounded-xl font-black text-sm transition-all ${activeWod === 'GENERAL' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-xl shadow-orange-500/50 scale-105' : 'bg-gray-800 text-orange-400 hover:bg-gray-700 border border-orange-500/40'}`;
             genBtn.innerText = "🏆 CLASSIFICA GENERALE";
@@ -150,13 +149,10 @@
                 "https://judge-fda21-default-rtdb.europe-west1.firebasedatabase.app",
                 "https://judge-fda21-default-rtdb.us-central1.firebasedatabase.app"
             ];
-
             for (const url of candidates) {
                 try {
                     const res = await fetch(`${url}/scores.json`, { method: 'GET' });
-                    if (res.ok || res.status === 401 || res.status === 403) {
-                        return url;
-                    }
+                    if (res.ok || res.status === 401 || res.status === 403) return url;
                 } catch (e) {}
             }
             return candidates[0];
@@ -164,19 +160,12 @@
 
         async function fetchFirebaseData() {
             try {
-                if (!workingDbUrl) {
-                    workingDbUrl = await resolveWorkingUrl();
-                }
-
+                if (!workingDbUrl) workingDbUrl = await resolveWorkingUrl();
                 const [wodsRes, scoresRes] = await Promise.all([
                     fetch(`${workingDbUrl}/wods.json`),
                     fetch(`${workingDbUrl}/scores.json`)
                 ]);
-
-                if (!wodsRes.ok || !scoresRes.ok) {
-                    throw new Error(`HTTP Error: WODs ${wodsRes.status}, Scores ${scoresRes.status}`);
-                }
-
+                if (!wodsRes.ok || !scoresRes.ok) throw new Error("Network error");
                 allWodsData = await wodsRes.json() || {};
                 const rawScores = await scoresRes.json() || {};
 
@@ -189,7 +178,6 @@
                 document.getElementById('conn-dot').className = "w-3 h-3 rounded-full bg-green-500 animate-pulse";
                 document.getElementById('conn-text').innerText = "ONLINE (FIREBASE)";
                 document.getElementById('conn-text').className = "text-sm font-bold text-green-400";
-
                 updateUI();
             } catch (err) {
                 console.error("Firebase fetch error:", err);
@@ -199,6 +187,69 @@
             }
         }
 
+        function isTimeWod(wodName) {
+            return ['WOD 1', 'WOD 2', 'WOD 3', 'WOD 5', 'WOD 7', 'WOD 9'].includes(wodName);
+        }
+
+        function compareForTimeTeams(a, b, wodName) {
+            const targets = {
+                'WOD 1': 210,
+                'WOD 2': 0, // row uses meters
+                'WOD 3': 150,
+                'WOD 5': 80,
+                'WOD 7': 400,
+                'WOD 9': 240
+            };
+            const target = targets[wodName] || 0;
+
+            const aCompleted = target > 0 ? (a.reps >= target || a.score >= target) : (a.timeSeconds > 0);
+            const bCompleted = target > 0 ? (b.reps >= target || b.score >= target) : (b.timeSeconds > 0);
+
+            if (aCompleted && !bCompleted) return -1;
+            if (!aCompleted && bCompleted) return 1;
+
+            if (aCompleted && bCompleted) {
+                // Parità di rep completate (o completati entrambi): vince chi ha il tempo migliore (minore)
+                const tA = a.timeSeconds > 0 ? a.timeSeconds : 999999;
+                const tB = b.timeSeconds > 0 ? b.timeSeconds : 999999;
+                return tA - tB;
+            } else {
+                // Non completati entro il time cap: classifica in funzione delle rep ottenute (maggiori rep)
+                const rA = a.reps || a.score || 0;
+                const rB = b.reps || b.score || 0;
+                return rB - rA;
+            }
+        }
+
+        function getWodPointsMap(wodName, wodTeams) {
+            const timeWod = isTimeWod(wodName);
+            const entries = Object.keys(wodTeams || {}).map(teamKey => {
+                const data = wodTeams[teamKey];
+                return {
+                    name: teamKey,
+                    reps: Number(data.reps || data.score || 0),
+                    timeSeconds: Number(data.timeSeconds || 0),
+                    wodType: data.wodType || 'REPS',
+                    score: Number(data.score || 0),
+                    maxLoad: Number(data.maxLoad || 0)
+                };
+            });
+
+            if (timeWod) {
+                entries.sort((a, b) => compareForTimeTeams(a, b, wodName));
+            } else {
+                entries.sort((a, b) => b.reps - a.reps);
+            }
+
+            const pointsMap = {};
+            const ptsTable = [5, 4, 3, 2, 1];
+            entries.forEach((e, idx) => {
+                const p = idx < ptsTable.length ? ptsTable[idx] : 1;
+                pointsMap[e.name] = p;
+            });
+            return pointsMap;
+        }
+
         function updateUI() {
             const teamsGrid = document.getElementById('teams-grid');
             teamsGrid.innerHTML = '';
@@ -206,32 +257,30 @@
             const chartData = [];
 
             if (activeWod === 'GENERAL') {
-                // GENERAL LEADERBOARD ACROSS ALL WODS
                 document.getElementById('current-wod-title').innerText = "🏆 CLASSIFICA GENERALE ASSOLUTA";
-                document.getElementById('current-wod-badge').innerText = "Tutti i WOD";
+                document.getElementById('current-wod-badge').innerText = "Punti WOD (5-4-3-2-1)";
                 document.getElementById('chart-title').innerText = "📊 Punteggio Totale Assoluto";
 
                 const totals = {};
-                Object.keys(allWodsData).forEach(wodKey => {
-                    const wodTeams = allWodsData[wodKey] || {};
-                    Object.keys(wodTeams).forEach(teamKey => {
-                        const data = wodTeams[teamKey];
-                        const score = data.score !== undefined ? Number(data.score) : (data.wodType === 'MAX_LOAD' ? Number(data.maxLoad || 0) : Number(data.reps || 0));
-                        totals[teamKey] = (totals[teamKey] || 0) + score;
+                for (let i = 1; i <= 12; i++) {
+                    const wName = `WOD ${i}`;
+                    const wodTeams = allWodsData[wName] || {};
+                    const ptsMap = getWodPointsMap(wName, wodTeams);
+                    Object.keys(ptsMap).forEach(team => {
+                        totals[team] = (totals[team] || 0) + ptsMap[team];
                     });
-                });
+                }
 
                 const sortedTeams = Object.keys(totals).map(t => ({ name: t, total: totals[t] })).sort((a, b) => b.total - a.total);
 
                 if (sortedTeams.length > 0 && sortedTeams[0].total > 0) {
-                    const champion = sortedTeams[0];
-                    document.getElementById('leader-text').innerText = `🔥 CAMPIONE ASSOLUTO: ${champion.name} (${champion.total} Punti Totali)!`;
+                    document.getElementById('leader-text').innerText = `🔥 CAMPIONE ASSOLUTO: ${sortedTeams[0].name} (${sortedTeams[0].total} Punti)!`;
                 } else {
                     document.getElementById('leader-text').innerText = `👑 IN ATTESA DI PUNTEGGI GENERALI...`;
                 }
 
                 if (sortedTeams.length === 0) {
-                    teamsGrid.innerHTML = `<p class="text-gray-400 col-span-2 text-center py-12 text-lg">Nessun punteggio registrato nei WOD.</p>`;
+                    teamsGrid.innerHTML = `<p class="text-gray-400 col-span-2 text-center py-12 text-lg">Nessun punteggio registrato.</p>`;
                 } else {
                     sortedTeams.forEach((team, idx) => {
                         chartLabels.push(team.name);
@@ -252,59 +301,81 @@
                             badgeHtml = `<span class="absolute top-3 right-3 bg-gradient-to-r from-amber-600 to-amber-700 text-white text-xs font-black px-3 py-1 rounded-full shadow-lg">🥉 3° POSTO</span>`;
                         }
 
-                        card.className = `bg-gray-900/90 border ${glowClass} rounded-2xl p-6 relative overflow-hidden transition-all hover:scale-[1.02]`;
+                        card.className = `bg-gray-900/90 border ${glowClass} rounded-2xl p-6 relative overflow-hidden`;
                         card.innerHTML = `
                             ${badgeHtml}
                             <h4 class="text-xl font-bold text-white mb-2">${team.name}</h4>
-                            <div class="text-4xl font-black text-yellow-400 my-3">${team.total} <span class="text-sm font-normal text-gray-400">Punti</span></div>
-                            <div class="text-xs text-gray-400">Podium &bull; Classifica Generale</div>
+                            <div class="text-4xl font-black text-yellow-400 my-3">${team.total} <span class="text-sm font-normal text-gray-400">Punti Totali</span></div>
+                            <div class="text-xs text-gray-400">Regola: 1°=5, 2°=4, 3°=3, 4°=2, Ultimo=1</div>
                         `;
                         teamsGrid.appendChild(card);
                     });
                 }
 
             } else {
-                // SPECIFIC WOD LEADERBOARD
-                document.getElementById('current-wod-title').innerText = `${activeWod} - Classifica Team`;
-                document.getElementById('current-wod-badge').innerText = "In Gara";
-                document.getElementById('chart-title').innerText = `📊 Confronto Punteggi ${activeWod}`;
+                document.getElementById('current-wod-title').innerText = `${activeWod} - Classifica`;
+                document.getElementById('current-wod-badge').innerText = isTimeWod(activeWod) ? "Time Cap 8m (Completati per tempo, non completati per rep)" : "Reps / Load";
+                document.getElementById('chart-title').innerText = `📊 Punti ${activeWod} (5, 4, 3, 2, 1)`;
 
                 const wodTeams = allWodsData[activeWod] || {};
+                const timeWod = isTimeWod(activeWod);
+
                 const teamEntries = Object.keys(wodTeams).map(teamKey => {
                     const data = wodTeams[teamKey];
                     return {
                         name: teamKey,
-                        score: data.score !== undefined ? Number(data.score) : (data.wodType === 'MAX_LOAD' ? Number(data.maxLoad || 0) : Number(data.reps || 0)),
-                        reps: data.reps || 0,
-                        maxLoad: data.maxLoad || 0,
-                        wodType: data.wodType || 'REPS'
+                        reps: Number(data.reps || data.score || 0),
+                        timeSeconds: Number(data.timeSeconds || 0),
+                        wodType: data.wodType || 'REPS',
+                        score: Number(data.score || 0),
+                        maxLoad: Number(data.maxLoad || 0),
+                        category: data.category || ''
                     };
-                }).sort((a, b) => b.score - a.score);
+                });
 
-                if (teamEntries.length > 0 && teamEntries[0].score > 0) {
-                    const leader = teamEntries[0];
-                    document.getElementById('leader-text').innerText = `👑 ${leader.name} (${leader.score} ${leader.wodType === 'MAX_LOAD' ? 'kg' : 'reps'}) su ${activeWod}`;
+                if (timeWod) {
+                    teamEntries.sort((a, b) => compareForTimeTeams(a, b, activeWod));
                 } else {
-                    document.getElementById('leader-text').innerText = `In attesa di punteggi per ${activeWod}...`;
+                    teamEntries.sort((a, b) => b.reps - a.reps);
+                }
+
+                const pointsMap = getWodPointsMap(activeWod, wodTeams);
+
+                if (teamEntries.length > 0) {
+                    const l = teamEntries[0];
+                    const lDisp = timeWod && l.timeSeconds > 0 ? `${Math.floor(l.timeSeconds/60)}m ${l.timeSeconds%60}s` : `${l.reps} reps`;
+                    document.getElementById('leader-text').innerText = `👑 Leader ${activeWod}: ${l.name} (${lDisp}) - 5 Punti`;
+                } else {
+                    document.getElementById('leader-text').innerText = `In attesa di risultati per ${activeWod}...`;
                 }
 
                 if (teamEntries.length === 0) {
-                    teamsGrid.innerHTML = `<p class="text-gray-400 col-span-2 text-center py-12 text-lg">Nessun team inserito per ${activeWod}. Inserisci il nome esatto del team nell'app per crearlo!</p>`;
+                    teamsGrid.innerHTML = `<p class="text-gray-400 col-span-2 text-center py-12 text-lg">Nessun team registrato per ${activeWod}.</p>`;
                 } else {
                     teamEntries.forEach((team, idx) => {
+                        const pts = pointsMap[team.name] || 1;
                         chartLabels.push(team.name);
-                        chartData.push(team.score);
+                        chartData.push(pts);
 
                         const card = document.createElement('div');
                         card.className = `bg-gray-900/80 border ${idx === 0 ? 'border-orange-500 glow-orange' : 'border-gray-800'} rounded-xl p-5 relative overflow-hidden`;
-                        const badge = idx === 0 ? `<span class="absolute top-3 right-3 bg-orange-500 text-white text-xs font-black px-2.5 py-1 rounded-full">#1 LEADER</span>` : `<span class="absolute top-3 right-3 bg-gray-800 text-gray-400 text-xs font-bold px-2.5 py-1 rounded-full">#${idx + 1}</span>`;
-                        const displayScore = team.wodType === 'MAX_LOAD' ? `${team.maxLoad} kg` : `${team.reps} rep`;
+                        const badge = idx === 0 ? `<span class="absolute top-3 right-3 bg-orange-500 text-white text-xs font-black px-2.5 py-1 rounded-full">#1 (5 PUNTI)</span>` : `<span class="absolute top-3 right-3 bg-gray-800 text-gray-400 text-xs font-bold px-2.5 py-1 rounded-full">#${idx + 1} (${pts} Punti)</span>`;
+
+                        let perfDisp = "";
+                        if (timeWod && team.timeSeconds > 0) {
+                            const mm = Math.floor(team.timeSeconds / 60);
+                            const ss = team.timeSeconds % 60;
+                            perfDisp = `${mm}m ${ss}s (${team.reps} reps)`;
+                        } else {
+                            perfDisp = `${team.reps} reps`;
+                        }
 
                         card.innerHTML = `
                             ${badge}
                             <h4 class="text-lg font-bold text-white mb-2">${team.name}</h4>
-                            <div class="text-3xl font-black text-green-400 my-3">${displayScore}</div>
-                            <div class="text-xs text-gray-400">WOD: <span class="text-gray-200 font-semibold">${activeWod}</span></div>
+                            <div class="text-3xl font-black text-green-400 my-2">${perfDisp}</div>
+                            <div class="text-sm font-bold text-yellow-400">Punti WOD assegnati: ${pts}</div>
+                            ${team.category ? `<div class="text-xs text-gray-400 mt-1">Categoria: ${team.category}</div>` : ''}
                         `;
                         teamsGrid.appendChild(card);
                     });
@@ -323,7 +394,7 @@
                 jCard.className = `bg-gray-900/90 border ${jData ? 'border-blue-500 shadow-lg shadow-blue-500/20' : 'border-gray-800'} rounded-xl p-3 text-center`;
 
                 if (jData) {
-                    const val = jData.wodType === 'MAX_LOAD' ? `${jData.maxLoad} kg` : `${jData.reps} reps`;
+                    const val = jData.wodType === 'MAX_LOAD' ? `${jData.maxLoad} kg` : (jData.wodType === 'TIME' || jData.wodType === 'ROW' ? `${Math.floor(jData.timeSeconds/60)}m ${jData.timeSeconds%60}s` : `${jData.reps} reps`);
                     jCard.innerHTML = `
                         <div class="text-xs font-bold text-blue-400 mb-1">GIUDICE #${i}</div>
                         <div class="text-sm font-bold text-white truncate">${jData.athleteName}</div>
@@ -341,7 +412,7 @@
 
         initWodTabs();
         fetchFirebaseData();
-        setInterval(fetchFirebaseData, 100);
+        setInterval(fetchFirebaseData, 1000);
     </script>
 </body>
 </html>
