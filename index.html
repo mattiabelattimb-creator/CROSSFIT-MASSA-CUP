@@ -298,11 +298,17 @@
                     }
                 }
 
-                const rankIndex = j - 1;
-                const assignedPts = rankIndex < ptsTable.length ? ptsTable[rankIndex] : 1;
+                // Calculate average points for tied ranks from i to j-1
+                let sumPts = 0;
+                let count = j - i;
+                for (let k = i; k < j; k++) {
+                    const rankPts = k < ptsTable.length ? ptsTable[k] : 1;
+                    sumPts += rankPts;
+                }
+                const avgPts = sumPts / count;
 
                 for (let k = i; k < j; k++) {
-                    pointsMap[entries[k].name] = assignedPts;
+                    pointsMap[entries[k].name] = avgPts;
                 }
                 i = j;
             }
@@ -316,7 +322,7 @@
 
             if (activeWod === 'GENERAL') {
                 document.getElementById('current-wod-title').innerText = "🏆 CLASSIFICA GENERALE ASSOLUTA";
-                document.getElementById('current-wod-badge').innerText = "Punteggio Totale Punti WOD (5-4-3-2-1)";
+                document.getElementById('current-wod-badge').innerText = "Punteggio Totale Punti WOD (Media Pari Merito)";
 
                 const totals = {};
                 for (let i = 1; i <= 12; i++) {
@@ -370,7 +376,6 @@
 
                 teamEntries.forEach((team, idx) => {
                     chartLabels.push(team.name);
-                    // For WOD 4, display maxLoad on chart instead of reps
                     const val = isMaxLoad ? team.maxLoad : team.reps;
                     chartData.push(val);
                     barColors.push(teamColors[idx % teamColors.length]);
