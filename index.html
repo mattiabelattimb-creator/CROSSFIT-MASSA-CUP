@@ -43,7 +43,7 @@
         <div class="flex justify-between items-center mb-6 border-b border-cyan-500/20 pb-4">
             <div>
                 <h3 id="current-wod-title" class="text-2xl md:text-3xl font-black text-cyan-400">WOD 1 - Cyber Arena</h3>
-                <p id="current-wod-badge" class="text-xs text-cyan-300/80 font-semibold mt-1">Corsa - Time Cap 8 Minuti (Tempo Finale)</p>
+                <p id="current-wod-badge" class="text-xs text-cyan-300/80 font-semibold mt-1">Sviluppo in Tempo Reale (Leader a Sinistra con Corona Monumentale e Aureola Epica)</p>
             </div>
         </div>
         <div class="relative w-full" style="height: 550px;">
@@ -52,9 +52,29 @@
     </div>
 
     <!-- Judges Status Section -->
-    <div class="glass rounded-2xl p-6 border-cyan-500/30">
+    <div class="glass rounded-2xl p-6 border-cyan-500/30 mb-8">
         <h3 class="text-xl font-bold text-cyan-300 mb-4 border-b border-cyan-500/20 pb-3">📋 Stato Giudici in Diretta</h3>
         <div id="judges-grid" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-4"></div>
+    </div>
+
+    <!-- Audit Summary Section (Riepilogo per WOD e per Team) -->
+    <div class="glass rounded-3xl p-6 md:p-8 border border-amber-500/40 mb-8">
+        <h3 class="text-2xl font-black text-amber-400 mb-6 border-b border-amber-500/30 pb-3">🔍 Sezione di Controllo & Audit (Riepilogo Dettagliato)</h3>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- Table 1: Riepilogo per WOD -->
+            <div>
+                <h4 class="text-lg font-bold text-cyan-300 mb-3">📊 Dettaglio Risultati per WOD (1 - 12)</h4>
+                <div id="audit-wod-tabs" class="flex flex-wrap gap-1 mb-3"></div>
+                <div id="audit-wod-container" class="overflow-x-auto max-h-[500px] overflow-y-auto"></div>
+            </div>
+
+            <!-- Table 2: Riepilogo per Team -->
+            <div>
+                <h4 class="text-lg font-bold text-yellow-300 mb-3">🏆 Matrice Punti Team per WOD</h4>
+                <div id="audit-team-container" class="overflow-x-auto max-h-[500px] overflow-y-auto"></div>
+            </div>
+        </div>
     </div>
 
     <!-- Footer -->
@@ -69,6 +89,7 @@
         let judgesData = {};
         let activeIsWod1 = false;
         const teamColors = ['#00e5ff', '#ff5722', '#00e676', '#e040fb', '#ffeb3b', '#2196f3', '#e91e63', '#9c27b0'];
+        const fixedTeamList = ["007 I am", "Mezzogiorno di Ghisa", "Olandese Volante", "Minnesota Dreamin'", "Straordinari"];
 
         const insideBarPlugin = {
             id: 'insideBar',
@@ -90,20 +111,37 @@
 
                             ctx.save();
 
-                            // Draw Gold Aura around 1st place column (index === 0)
+                            // Exaggerated Divine Gold Aura & Monumental Glowing Crown on 1st place column (index === 0)
                             if (index === 0) {
                                 ctx.save();
-                                ctx.strokeStyle = '#ffd700';
-                                ctx.lineWidth = 5;
+                                // Outer celestial gigantic glow
+                                ctx.strokeStyle = 'rgba(255, 215, 0, 0.9)';
+                                ctx.lineWidth = 24;
+                                ctx.shadowColor = '#ffea00';
+                                ctx.shadowBlur = 200;
+                                ctx.strokeRect(bar.x - bar.width/2 - 24, bar.y - 24, bar.width + 48, barHeight + 48);
+
+                                // Inner brilliant gold ring
+                                ctx.strokeStyle = '#fff700';
+                                ctx.lineWidth = 12;
                                 ctx.shadowColor = '#ffd700';
-                                ctx.shadowBlur = 30;
-                                ctx.strokeRect(bar.x - bar.width/2 - 4, bar.y - 4, bar.width + 8, barHeight + 8);
+                                ctx.shadowBlur = 100;
+                                ctx.strokeRect(bar.x - bar.width/2 - 10, bar.y - 10, bar.width + 20, barHeight + 20);
+
+                                // Draw Monumental Glowing Crown (Corona Gigante) on top of the column
+                                ctx.fillStyle = '#ffd700';
+                                ctx.font = '900 140px Montserrat';
+                                ctx.textAlign = 'center';
+                                ctx.textBaseline = 'bottom';
+                                ctx.shadowColor = '#ffea00';
+                                ctx.shadowBlur = 90;
+                                ctx.fillText('👑', centerX, bar.y - 20);
                                 ctx.restore();
                             }
 
                             if (barHeight > 60) {
                                 let displayVal = rawValue;
-                                if (activeIsWod1 && actualSec > 0) {
+                                if ((activeIsWod1 || activeWod === 'WOD 2') && actualSec > 0) {
                                     const mm = Math.floor(actualSec / 60);
                                     const ss = actualSec % 60;
                                     displayVal = `${mm}m ${ss}s`;
@@ -124,7 +162,7 @@
                                 ctx.fillText(label, centerX, centerY + 45);
                             } else {
                                 let displayVal = rawValue;
-                                if (activeIsWod1 && actualSec > 0) {
+                                if ((activeIsWod1 || activeWod === 'WOD 2') && actualSec > 0) {
                                     const mm = Math.floor(actualSec / 60);
                                     const ss = actualSec % 60;
                                     displayVal = `${mm}m ${ss}s`;
@@ -247,6 +285,7 @@
                 document.getElementById('conn-text').innerText = "ONLINE (FIREBASE)";
                 document.getElementById('conn-text').className = "text-sm font-bold text-green-400";
                 updateUI();
+                updateAuditTables();
             } catch (err) {
                 console.error("Firebase fetch error:", err);
                 document.getElementById('conn-dot').className = "w-3 h-3 rounded-full bg-red-500";
@@ -355,6 +394,29 @@
             return pointsMap;
         }
 
+        let auditActiveWod = 'ALL';
+
+        function initAuditWodTabs() {
+            const tabsContainer = document.getElementById('audit-wod-tabs');
+            if (!tabsContainer) return;
+            tabsContainer.innerHTML = '';
+
+            const allBtn = document.createElement('button');
+            allBtn.className = `px-3 py-1 rounded-lg text-xs font-bold transition-all ${auditActiveWod === 'ALL' ? 'bg-cyan-500 text-black' : 'bg-slate-800 text-cyan-300'}`;
+            allBtn.innerText = 'Tutti';
+            allBtn.onclick = () => { auditActiveWod = 'ALL'; updateAuditTables(); initAuditWodTabs(); };
+            tabsContainer.appendChild(allBtn);
+
+            for (let i = 1; i <= 12; i++) {
+                const w = `WOD ${i}`;
+                const btn = document.createElement('button');
+                btn.className = `px-3 py-1 rounded-lg text-xs font-bold transition-all ${auditActiveWod === w ? 'bg-cyan-500 text-black' : 'bg-slate-800 text-cyan-300'}`;
+                btn.innerText = w;
+                btn.onclick = () => { auditActiveWod = w; updateAuditTables(); initAuditWodTabs(); };
+                tabsContainer.appendChild(btn);
+            }
+        }
+
         function updateUI() {
             const chartLabels = [];
             const chartData = [];
@@ -390,13 +452,13 @@
                 scoreChart.options.scales.y.reverse = false;
 
             } else {
-                activeIsWod1 = (activeWod === 'WOD 1');
+                activeIsWod1 = (activeWod === 'WOD 1' || activeWod === 'WOD 2');
                 document.getElementById('current-wod-title').innerText = `${activeWod} - Cyber Arena Live`;
-                document.getElementById('current-wod-badge').innerText = activeWod === 'WOD 1' ? "Corsa - Tempo Max 8 Minuti (480s)" : "Sviluppo in Tempo Reale";
+                document.getElementById('current-wod-badge').innerText = (activeWod === 'WOD 1') ? "Corsa - Tempo Max 8 Minuti (480s)" : (activeWod === 'WOD 2') ? "Row For Time - Tempo Max 10 Minuti (600s)" : "Sviluppo in Tempo Reale";
 
                 const wodTeams = allWodsData[activeWod] || {};
                 const isMaxLoad = (activeWod === 'WOD 4');
-                const isWod1 = (activeWod === 'WOD 1');
+                const isWod1Or2 = (activeWod === 'WOD 1' || activeWod === 'WOD 2');
 
                 const teamEntries = Object.keys(wodTeams).map(teamKey => {
                     const data = wodTeams[teamKey];
@@ -411,7 +473,7 @@
                     };
                 });
 
-                if (isWod1) {
+                if (isWod1Or2) {
                     teamEntries.sort((a, b) => {
                         const tA = a.timeSeconds > 0 ? a.timeSeconds : 999999;
                         const tB = b.timeSeconds > 0 ? b.timeSeconds : 999999;
@@ -429,11 +491,10 @@
                     chartLabels.push(team.name);
                     let val = 0;
                     let actualT = 0;
-                    if (isWod1) {
+                    if (isWod1Or2) {
                         actualT = team.timeSeconds > 0 ? team.timeSeconds : 0;
-                        // Invert time for bar height so lower time (faster) has a taller bar!
-                        // Max time = 480s. If actualT = 0 (not finished), bar is 0. If finished in t, bar height = 480 - t.
-                        val = actualT > 0 ? (480 - actualT) : 0;
+                        const cap = activeWod === 'WOD 1' ? 480 : 600;
+                        val = actualT > 0 ? (cap - actualT) : 0;
                     } else if (isMaxLoad) {
                         val = team.maxLoad;
                     } else {
@@ -444,8 +505,8 @@
                     barColors.push(teamColors[idx % teamColors.length]);
                 });
 
-                if (isWod1) {
-                    scoreChart.options.scales.y.max = 480;
+                if (isWod1Or2) {
+                    scoreChart.options.scales.y.max = activeWod === 'WOD 1' ? 480 : 600;
                     scoreChart.options.scales.y.reverse = false;
                 } else if (isMaxLoad) {
                     const maxKg = Math.max(...chartData, 100);
@@ -485,7 +546,75 @@
             }
         }
 
+        function updateAuditTables() {
+            const wodContainer = document.getElementById('audit-wod-container');
+            let wodHtml = `<table class="w-full text-left text-xs text-cyan-200 border-collapse">
+                <thead><tr class="border-b border-cyan-500/40 text-cyan-400">
+                <th class="p-2">WOD</th><th class="p-2">Team</th><th class="p-2">Risultato</th><th class="p-2">Punti</th>
+                </tr></thead><tbody>`;
+
+            const startWod = auditActiveWod === 'ALL' ? 1 : Number(auditActiveWod.replace('WOD ', ''));
+            const endWod = auditActiveWod === 'ALL' ? 12 : startWod;
+
+            for (let i = startWod; i <= endWod; i++) {
+                const wName = `WOD ${i}`;
+                const wodTeams = allWodsData[wName] || {};
+                const ptsMap = getWodPointsMap(wName, wodTeams);
+
+                fixedTeamList.forEach(team => {
+                    const data = wodTeams[team];
+                    if (data) {
+                        const isTime = isTimeWod(wName) || wName === 'WOD 1' || wName === 'WOD 2';
+                        let resStr = `${data.reps || 0} reps`;
+                        if (isTime && data.timeSeconds > 0) {
+                            resStr = `${Math.floor(data.timeSeconds/60)}m ${data.timeSeconds%60}s`;
+                        } else if (wName === 'WOD 4') {
+                            resStr = `${data.maxLoad || 0} kg`;
+                        }
+                        const pts = ptsMap[team] !== undefined ? ptsMap[team] : '-';
+                        wodHtml += `<tr class="border-b border-slate-800 hover:bg-slate-800/50">
+                            <td class="p-2 font-bold text-cyan-300">${wName}</td>
+                            <td class="p-2 font-semibold">${team}</td>
+                            <td class="p-2 text-green-400">${resStr}</td>
+                            <td class="p-2 font-black text-yellow-400">${pts}</td>
+                        </tr>`;
+                    }
+                });
+            }
+            wodHtml += `</tbody></table>`;
+            wodContainer.innerHTML = wodHtml;
+
+            const teamContainer = document.getElementById('audit-team-container');
+            let teamHtml = `<table class="w-full text-left text-xs text-cyan-200 border-collapse">
+                <thead><tr class="border-b border-cyan-500/40 text-yellow-400">
+                <th class="p-2">Team</th>`;
+            for (let i = 1; i <= 12; i++) teamHtml += `<th class="p-2 text-center">W${i}</th>`;
+            teamHtml += `<th class="p-2 text-center text-amber-400 font-black">Tot</th></tr></thead><tbody>`;
+
+            fixedTeamList.forEach(team => {
+                teamHtml += `<tr class="border-b border-slate-800 hover:bg-slate-800/50">
+                    <td class="p-2 font-bold text-white">${team}</td>`;
+                let teamTotal = 0;
+                for (let i = 1; i <= 12; i++) {
+                    const wName = `WOD ${i}`;
+                    const wodTeams = allWodsData[wName] || {};
+                    const ptsMap = getWodPointsMap(wName, wodTeams);
+                    const pts = ptsMap[team];
+                    if (pts !== undefined) {
+                        teamTotal += pts;
+                        teamHtml += `<td class="p-2 text-center text-yellow-400 font-bold">${pts}</td>`;
+                    } else {
+                        teamHtml += `<td class="p-2 text-center text-slate-600">-</td>`;
+                    }
+                }
+                teamHtml += `<td class="p-2 text-center font-black text-amber-400 text-sm">${teamTotal}</td></tr>`;
+            });
+            teamHtml += `</tbody></table>`;
+            teamContainer.innerHTML = teamHtml;
+        }
+
         initWodTabs();
+        initAuditWodTabs();
         fetchFirebaseData();
         setInterval(fetchFirebaseData, 1000);
     </script>
