@@ -43,7 +43,7 @@
         <div class="flex justify-between items-center mb-6 border-b border-cyan-500/20 pb-4">
             <div>
                 <h3 id="current-wod-title" class="text-2xl md:text-3xl font-black text-cyan-400">WOD 1 - Cyber Arena</h3>
-                <p id="current-wod-badge" class="text-xs text-cyan-300/80 font-semibold mt-1">Sviluppo in Tempo Reale (Leader a Sinistra con Aureola d'Oro)</p>
+                <p id="current-wod-badge" class="text-xs text-cyan-300/80 font-semibold mt-1">Corsa - Time Cap 8 Minuti (Tempo Finale)</p>
             </div>
         </div>
         <div class="relative w-full" style="height: 550px;">
@@ -67,7 +67,7 @@
         let activeWod = "WOD 1";
         let allWodsData = {};
         let judgesData = {};
-        let activeIsTimeWod = false;
+        let activeIsWod1 = false;
         const teamColors = ['#00e5ff', '#ff5722', '#00e676', '#e040fb', '#ffeb3b', '#2196f3', '#e91e63', '#9c27b0'];
 
         const insideBarPlugin = {
@@ -79,6 +79,8 @@
                     meta.data.forEach((bar, index) => {
                         const rawValue = dataset.data[index];
                         const label = chart.data.labels[index];
+                        const actualSec = dataset.actualTimes ? dataset.actualTimes[index] : 0;
+
                         if (rawValue !== undefined && rawValue !== null) {
                             const barY = bar.y;
                             const barBase = bar.base;
@@ -88,7 +90,7 @@
 
                             ctx.save();
 
-                            // Draw Gold Aura (Aureola d'Oro) around the 1st place column (index === 0)
+                            // Draw Gold Aura around 1st place column (index === 0)
                             if (index === 0) {
                                 ctx.save();
                                 ctx.strokeStyle = '#ffd700';
@@ -101,32 +103,37 @@
 
                             if (barHeight > 60) {
                                 let displayVal = rawValue;
-                                if (activeIsTimeWod && rawValue > 0) {
-                                    const mm = Math.floor(rawValue / 60);
-                                    const ss = rawValue % 60;
+                                if (activeIsWod1 && actualSec > 0) {
+                                    const mm = Math.floor(actualSec / 60);
+                                    const ss = actualSec % 60;
                                     displayVal = `${mm}m ${ss}s`;
                                 }
 
-                                // Reps / Time value (Bold Black, sized to fill ~90% of column width)
+                                // Reps / Time value (96px bold black)
                                 ctx.fillStyle = '#000000';
-                                ctx.font = '900 52px Montserrat';
+                                ctx.font = '900 96px Montserrat';
                                 ctx.textAlign = 'center';
                                 ctx.textBaseline = 'middle';
-                                ctx.fillText(displayVal, centerX, centerY - 25);
+                                ctx.fillText(displayVal, centerX, centerY - 35);
 
-                                // Team name inside column (Bold dark, always visible)
+                                // Team name inside column (40px bold dark)
                                 ctx.fillStyle = '#0a0a0a';
-                                ctx.font = '700 24px Montserrat';
+                                ctx.font = '700 40px Montserrat';
                                 ctx.textAlign = 'center';
                                 ctx.textBaseline = 'middle';
-                                ctx.fillText(label, centerX, centerY + 25);
+                                ctx.fillText(label, centerX, centerY + 45);
                             } else {
-                                // If bar is short, draw above bar
+                                let displayVal = rawValue;
+                                if (activeIsWod1 && actualSec > 0) {
+                                    const mm = Math.floor(actualSec / 60);
+                                    const ss = actualSec % 60;
+                                    displayVal = `${mm}m ${ss}s`;
+                                }
                                 ctx.fillStyle = '#00ffff';
-                                ctx.font = 'bold 16px Montserrat';
+                                ctx.font = 'bold 20px Montserrat';
                                 ctx.textAlign = 'center';
                                 ctx.textBaseline = 'bottom';
-                                ctx.fillText(`${label}: ${rawValue}`, centerX, barY - 8);
+                                ctx.fillText(`${label}: ${displayVal}`, centerX, barY - 10);
                             }
                             ctx.restore();
                         }
@@ -143,6 +150,7 @@
                 datasets: [{
                     label: 'Risultato',
                     data: [],
+                    actualTimes: [],
                     backgroundColor: function(context) {
                         const chart = context.chart;
                         const {ctx, chartArea} = chart;
@@ -253,7 +261,7 @@
 
         function compareForTimeTeams(a, b, wodName) {
             const targets = {
-                'WOD 1': 0, // WOD 1 is run (time seconds)
+                'WOD 1': 0,
                 'WOD 2': 0,
                 'WOD 3': 150,
                 'WOD 5': 80,
@@ -297,7 +305,6 @@
             });
 
             if (isWod1) {
-                // WOD 1: lowest timeSeconds wins (0 timeSeconds = not finished / last)
                 entries.sort((a, b) => {
                     const tA = a.timeSeconds > 0 ? a.timeSeconds : 999999;
                     const tB = b.timeSeconds > 0 ? b.timeSeconds : 999999;
@@ -351,9 +358,11 @@
         function updateUI() {
             const chartLabels = [];
             const chartData = [];
+            const chartTimes = [];
             const barColors = [];
 
             if (activeWod === 'GENERAL') {
+                activeIsWod1 = false;
                 document.getElementById('current-wod-title').innerText = "🏆 CLASSIFICA GENERALE ASSOLUTA";
                 document.getElementById('current-wod-badge').innerText = "Punteggio Totale Punti WOD (Media Pari Merito)";
 
@@ -372,18 +381,18 @@
                 sortedTeams.forEach((team, idx) => {
                     chartLabels.push(team.name);
                     chartData.push(team.total);
+                    chartTimes.push(0);
                     barColors.push(teamColors[idx % teamColors.length]);
                 });
 
                 const maxVal = Math.max(...chartData, 10);
                 scoreChart.options.scales.y.max = Math.ceil((maxVal * 4 / 3) / 5) * 5;
                 scoreChart.options.scales.y.reverse = false;
-                activeIsTimeWod = false;
 
             } else {
-                activeIsTimeWod = isTimeWod(activeWod);
+                activeIsWod1 = (activeWod === 'WOD 1');
                 document.getElementById('current-wod-title').innerText = `${activeWod} - Cyber Arena Live`;
-                document.getElementById('current-wod-badge').innerText = activeWod === 'WOD 1' ? "Corsa (Tempo Max 8m / 480s)" : (activeIsTimeWod ? "Time Cap 8m" : (activeWod === 'WOD 4' ? "Massimale Clean (Kg)" : "Reps / Load"));
+                document.getElementById('current-wod-badge').innerText = activeWod === 'WOD 1' ? "Corsa - Tempo Max 8 Minuti (480s)" : "Sviluppo in Tempo Reale";
 
                 const wodTeams = allWodsData[activeWod] || {};
                 const isMaxLoad = (activeWod === 'WOD 4');
@@ -402,7 +411,6 @@
                     };
                 });
 
-                // Sort teamEntries so leader is FIRST (index 0) on the left
                 if (isWod1) {
                     teamEntries.sort((a, b) => {
                         const tA = a.timeSeconds > 0 ? a.timeSeconds : 999999;
@@ -411,7 +419,7 @@
                     });
                 } else if (isMaxLoad) {
                     teamEntries.sort((a, b) => b.maxLoad - a.maxLoad);
-                } else if (activeIsTimeWod) {
+                } else if (isTimeWod(activeWod)) {
                     teamEntries.sort((a, b) => compareForTimeTeams(a, b, activeWod));
                 } else {
                     teamEntries.sort((a, b) => b.reps - a.reps);
@@ -420,24 +428,24 @@
                 teamEntries.forEach((team, idx) => {
                     chartLabels.push(team.name);
                     let val = 0;
+                    let actualT = 0;
                     if (isWod1) {
-                        val = team.timeSeconds > 0 ? team.timeSeconds : 480; // max time cap 480s (8 min)
+                        actualT = team.timeSeconds > 0 ? team.timeSeconds : 0;
+                        // Invert time for bar height so lower time (faster) has a taller bar!
+                        // Max time = 480s. If actualT = 0 (not finished), bar is 0. If finished in t, bar height = 480 - t.
+                        val = actualT > 0 ? (480 - actualT) : 0;
                     } else if (isMaxLoad) {
                         val = team.maxLoad;
-                    } else if (activeIsTimeWod) {
-                        // For other time WODs, if completed, use time seconds (or inverted so lower time is taller bar, or raw time where max scale is 480s)
-                        val = team.timeSeconds > 0 ? team.timeSeconds : 480;
                     } else {
                         val = team.reps;
                     }
                     chartData.push(val);
+                    chartTimes.push(actualT);
                     barColors.push(teamColors[idx % teamColors.length]);
                 });
 
-                if (isWod1 || activeIsTimeWod) {
-                    // For time WODs (like WOD 1 Corsa), max scale is 480 seconds (8 minutes)
+                if (isWod1) {
                     scoreChart.options.scales.y.max = 480;
-                    // For time, lower time is better, so reversing Y axis or showing time ascending where smaller bar = faster time
                     scoreChart.options.scales.y.reverse = false;
                 } else if (isMaxLoad) {
                     const maxKg = Math.max(...chartData, 100);
@@ -452,6 +460,7 @@
 
             scoreChart.data.labels = chartLabels.length ? chartLabels : ['Nessun Team'];
             scoreChart.data.datasets[0].data = chartData.length ? chartData : [0];
+            scoreChart.data.datasets[0].actualTimes = chartTimes;
             scoreChart.data.datasets[0].backgroundColor = barColors;
             scoreChart.update();
 
