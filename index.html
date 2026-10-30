@@ -90,12 +90,12 @@
                             ctx.textBaseline = 'middle';
 
                             if (barHeight > 60) {
-                                // Draw rep count (doubled size: 96px bold black)
+                                // Draw rep count (96px bold black)
                                 ctx.fillStyle = '#000000';
                                 ctx.font = '900 96px Montserrat';
                                 ctx.fillText(value, centerX, centerY - 35);
 
-                                // Draw team name always visible below rep count (doubled size: 40px bold dark)
+                                // Draw team name always visible below rep count (40px bold dark)
                                 ctx.fillStyle = '#0a0a0a';
                                 ctx.font = '700 40px Montserrat';
                                 ctx.fillText(label, centerX, centerY + 45);
@@ -259,6 +259,8 @@
 
         function getWodPointsMap(wodName, wodTeams) {
             const timeWod = isTimeWod(wodName);
+            const isMaxLoad = (wodName === 'WOD 4');
+
             const entries = Object.keys(wodTeams || {}).map(teamKey => {
                 const data = wodTeams[teamKey];
                 return {
@@ -271,7 +273,9 @@
                 };
             });
 
-            if (timeWod) {
+            if (isMaxLoad) {
+                entries.sort((a, b) => b.maxLoad - a.maxLoad);
+            } else if (timeWod) {
                 entries.sort((a, b) => compareForTimeTeams(a, b, wodName));
             } else {
                 entries.sort((a, b) => b.reps - a.reps);
@@ -279,10 +283,29 @@
 
             const pointsMap = {};
             const ptsTable = [5, 4, 3, 2, 1];
-            entries.forEach((e, idx) => {
-                const p = idx < ptsTable.length ? ptsTable[idx] : 1;
-                pointsMap[e.name] = p;
-            });
+
+            let i = 0;
+            while (i < entries.length) {
+                let j = i;
+                while (j < entries.length) {
+                    if (isMaxLoad) {
+                        if (entries[j].maxLoad === entries[i].maxLoad) j++; else break;
+                    } else if (timeWod) {
+                        const comp = compareForTimeTeams(entries[j], entries[i], wodName);
+                        if (comp === 0) j++; else break;
+                    } else {
+                        if (entries[j].reps === entries[i].reps) j++; else break;
+                    }
+                }
+
+                const rankIndex = j - 1;
+                const assignedPts = rankIndex < ptsTable.length ? ptsTable[rankIndex] : 1;
+
+                for (let k = i; k < j; k++) {
+                    pointsMap[entries[k].name] = assignedPts;
+                }
+                i = j;
+            }
             return pointsMap;
         }
 
@@ -318,10 +341,11 @@
 
             } else {
                 document.getElementById('current-wod-title').innerText = `${activeWod} - Cyber Arena Live`;
-                document.getElementById('current-wod-badge').innerText = isTimeWod(activeWod) ? "Time Cap 8m (Completati per tempo, non completati per rep)" : "Reps / Load";
+                document.getElementById('current-wod-badge').innerText = isTimeWod(activeWod) ? "Time Cap 8m (Completati per tempo, non completati per rep)" : (activeWod === 'WOD 4' ? "Massimale Clean (Kg)" : "Reps / Load");
 
                 const wodTeams = allWodsData[activeWod] || {};
                 const timeWod = isTimeWod(activeWod);
+                const isMaxLoad = (activeWod === 'WOD 4');
 
                 const teamEntries = Object.keys(wodTeams).map(teamKey => {
                     const data = wodTeams[teamKey];
@@ -336,7 +360,9 @@
                     };
                 });
 
-                if (timeWod) {
+                if (isMaxLoad) {
+                    teamEntries.sort((a, b) => b.maxLoad - a.maxLoad);
+                } else if (timeWod) {
                     teamEntries.sort((a, b) => compareForTimeTeams(a, b, activeWod));
                 } else {
                     teamEntries.sort((a, b) => b.reps - a.reps);
@@ -344,7 +370,9 @@
 
                 teamEntries.forEach((team, idx) => {
                     chartLabels.push(team.name);
-                    chartData.push(team.reps);
+                    // For WOD 4, display maxLoad on chart instead of reps
+                    const val = isMaxLoad ? team.maxLoad : team.reps;
+                    chartData.push(val);
                     barColors.push(teamColors[idx % teamColors.length]);
                 });
 
@@ -358,6 +386,9 @@
                 };
                 if (fixedMaxReps[activeWod]) {
                     scoreChart.options.scales.y.max = fixedMaxReps[activeWod];
+                } else if (isMaxLoad) {
+                    const maxKg = Math.max(...chartData, 100);
+                    scoreChart.options.scales.y.max = Math.ceil((maxKg * 4 / 3) / 20) * 20;
                 } else {
                     const maxRep = Math.max(...chartData, 10);
                     scoreChart.options.scales.y.max = Math.ceil((maxRep * 4 / 3) / 10) * 10;
