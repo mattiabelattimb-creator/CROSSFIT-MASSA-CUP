@@ -57,9 +57,9 @@
         <div id="judges-grid" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-4"></div>
     </div>
 
-    <!-- Audit Summary Section (Riepilogo per WOD e per Team) -->
-    <div class="glass rounded-3xl p-6 md:p-8 border border-amber-500/40 mb-8">
-        <h3 class="text-2xl font-black text-amber-400 mb-6 border-b border-amber-500/30 pb-3">🔍 Sezione di Controllo & Audit (Riepilogo Dettagliato)</h3>
+    <!-- Riepilogo Section (Only visible on General Classification) -->
+    <div id="riepilogo-section" class="glass rounded-3xl p-6 md:p-8 border border-amber-500/40 mb-8 hidden">
+        <h3 class="text-2xl font-black text-amber-400 mb-6 border-b border-amber-500/30 pb-3">📋 Riepilogo</h3>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <!-- Table 1: Riepilogo per WOD -->
@@ -140,38 +140,117 @@
                             }
 
                             if (barHeight > 60) {
-                                let displayVal = rawValue;
-                                if ((activeIsWod1 || activeWod === 'WOD 2') && actualSec > 0) {
+                                const isWod1 = (activeWod === 'WOD 1');
+                                const isWod2 = (activeWod === 'WOD 2');
+                                const timeWodTargets = { 'WOD 3': 150, 'WOD 5': 80, 'WOD 7': 400, 'WOD 9': 240 };
+                                const teamObj = dataset.teamEntries ? dataset.teamEntries[index] : null;
+                                const wod2Target = teamObj ? getWod2Target(teamObj.category) : 2000;
+                                const target = isWod2 ? wod2Target : (timeWodTargets[activeWod] || 0);
+                                const isCompleted = teamObj && ((teamObj.reps || teamObj.score || 0) >= target || teamObj.timeSeconds > 0);
+
+                                let timeStr = '';
+                                if (actualSec > 0) {
                                     const mm = Math.floor(actualSec / 60);
                                     const ss = actualSec % 60;
-                                    displayVal = `${mm}m ${ss}s`;
+                                    timeStr = `${mm}m ${ss}s`;
                                 }
 
-                                // Reps / Time value (96px bold black)
-                                ctx.fillStyle = '#000000';
-                                ctx.font = '900 96px Montserrat';
-                                ctx.textAlign = 'center';
-                                ctx.textBaseline = 'middle';
-                                ctx.fillText(displayVal, centerX, centerY - 35);
+                                if (isWod2 && !isCompleted) {
+                                    // WOD 2 in progress: hide meters, show team name only
+                                    ctx.fillStyle = '#0a0a0a';
+                                    ctx.font = '700 40px Montserrat';
+                                    ctx.textAlign = 'center';
+                                    ctx.textBaseline = 'middle';
+                                    ctx.fillText(label, centerX, centerY);
+                                } else if (isWod2 && isCompleted && timeStr !== '') {
+                                    // Completed WOD 2: show Meters (top), Time (middle), Team Name (bottom)
+                                    const metersStr = `${teamObj.reps || teamObj.score || target}m`;
 
-                                // Team name inside column (40px bold dark)
-                                ctx.fillStyle = '#0a0a0a';
-                                ctx.font = '700 40px Montserrat';
-                                ctx.textAlign = 'center';
-                                ctx.textBaseline = 'middle';
-                                ctx.fillText(label, centerX, centerY + 45);
+                                    ctx.fillStyle = '#000000';
+                                    ctx.font = '900 70px Montserrat';
+                                    ctx.textAlign = 'center';
+                                    ctx.textBaseline = 'middle';
+                                    ctx.fillText(metersStr, centerX, centerY - 55);
+
+                                    ctx.fillStyle = '#111111';
+                                    ctx.font = '900 75px Montserrat';
+                                    ctx.textAlign = 'center';
+                                    ctx.textBaseline = 'middle';
+                                    ctx.fillText(timeStr, centerX, centerY + 15);
+
+                                    ctx.fillStyle = '#0a0a0a';
+                                    ctx.font = '700 40px Montserrat';
+                                    ctx.textAlign = 'center';
+                                    ctx.textBaseline = 'middle';
+                                    ctx.fillText(label, centerX, centerY + 85);
+                                } else if (target > 0 && isCompleted && timeStr !== '') {
+                                    // Completed For Time WOD: show Reps (top), Time (middle), Team Name (bottom)
+                                    const repsStr = `${teamObj.reps || target} reps`;
+
+                                    ctx.fillStyle = '#000000';
+                                    ctx.font = '900 70px Montserrat';
+                                    ctx.textAlign = 'center';
+                                    ctx.textBaseline = 'middle';
+                                    ctx.fillText(repsStr, centerX, centerY - 55);
+
+                                    ctx.fillStyle = '#111111';
+                                    ctx.font = '900 75px Montserrat';
+                                    ctx.textAlign = 'center';
+                                    ctx.textBaseline = 'middle';
+                                    ctx.fillText(timeStr, centerX, centerY + 15);
+
+                                    ctx.fillStyle = '#0a0a0a';
+                                    ctx.font = '700 40px Montserrat';
+                                    ctx.textAlign = 'center';
+                                    ctx.textBaseline = 'middle';
+                                    ctx.fillText(label, centerX, centerY + 85);
+                                } else {
+                                    let displayVal = rawValue;
+                                    if (isWod1 && timeStr !== '') displayVal = timeStr;
+                                    else if (isWod2) displayVal = '';
+                                    else if (target > 0 && teamObj) displayVal = `${teamObj.reps || 0} reps`;
+
+                                    ctx.fillStyle = '#000000';
+                                    ctx.font = '900 96px Montserrat';
+                                    ctx.textAlign = 'center';
+                                    ctx.textBaseline = 'middle';
+                                    ctx.fillText(displayVal, centerX, centerY - 35);
+
+                                    ctx.fillStyle = '#0a0a0a';
+                                    ctx.font = '700 40px Montserrat';
+                                    ctx.textAlign = 'center';
+                                    ctx.textBaseline = 'middle';
+                                    ctx.fillText(label, centerX, centerY + 45);
+                                }
                             } else {
                                 let displayVal = rawValue;
-                                if ((activeIsWod1 || activeWod === 'WOD 2') && actualSec > 0) {
+                                const isWod1 = (activeWod === 'WOD 1');
+                                const isWod2 = (activeWod === 'WOD 2');
+                                const timeWodTargets = { 'WOD 3': 150, 'WOD 5': 80, 'WOD 7': 400, 'WOD 9': 240 };
+                                const teamObj = dataset.teamEntries ? dataset.teamEntries[index] : null;
+                                const wod2Target = teamObj ? getWod2Target(teamObj.category) : 2000;
+                                const target = isWod2 ? wod2Target : (timeWodTargets[activeWod] || 0);
+                                const isCompleted = teamObj && ((teamObj.reps || teamObj.score || 0) >= target || teamObj.timeSeconds > 0);
+
+                                let timeStr = '';
+                                if (actualSec > 0) {
                                     const mm = Math.floor(actualSec / 60);
                                     const ss = actualSec % 60;
-                                    displayVal = `${mm}m ${ss}s`;
+                                    timeStr = `${mm}m ${ss}s`;
                                 }
+
+                                if (isWod1 && timeStr !== '') displayVal = timeStr;
+                                else if (isWod2) {
+                                    if (isCompleted && timeStr !== '') displayVal = `${teamObj.reps || teamObj.score || target}m - ${timeStr}`;
+                                    else displayVal = '';
+                                }
+                                else if (target > 0 && isCompleted && timeStr !== '') displayVal = `${teamObj.reps || target} reps - ${timeStr}`;
+
                                 ctx.fillStyle = '#00ffff';
                                 ctx.font = 'bold 20px Montserrat';
                                 ctx.textAlign = 'center';
                                 ctx.textBaseline = 'bottom';
-                                ctx.fillText(`${label}: ${displayVal}`, centerX, barY - 10);
+                                ctx.fillText(displayVal !== '' ? `${label}: ${displayVal}` : label, centerX, barY - 10);
                             }
                             ctx.restore();
                         }
@@ -298,19 +377,19 @@
             return ['WOD 1', 'WOD 2', 'WOD 3', 'WOD 5', 'WOD 7', 'WOD 9'].includes(wodName);
         }
 
-        function compareForTimeTeams(a, b, wodName) {
-            const targets = {
-                'WOD 1': 0,
-                'WOD 2': 0,
-                'WOD 3': 150,
-                'WOD 5': 80,
-                'WOD 7': 400,
-                'WOD 9': 240
-            };
-            const target = targets[wodName] || 0;
+        function getWod2Target(category) {
+            const cat = (category || 'MM').toUpperCase();
+            if (cat === 'MW') return 1800;
+            if (cat === 'WW') return 1600;
+            return 2000;
+        }
 
-            const aCompleted = target > 0 ? (a.reps >= target || a.score >= target) : (a.timeSeconds > 0);
-            const bCompleted = target > 0 ? (b.reps >= target || b.score >= target) : (b.timeSeconds > 0);
+        function compareForTimeTeams(a, b, wodName) {
+            const target = wodName === 'WOD 2' ? getWod2Target(a.category) : (wodName === 'WOD 3' ? 150 : wodName === 'WOD 5' ? 80 : wodName === 'WOD 7' ? 400 : wodName === 'WOD 9' ? 240 : 0);
+            const targetB = wodName === 'WOD 2' ? getWod2Target(b.category) : target;
+
+            const aCompleted = target > 0 ? ((a.reps || a.score || 0) >= target || a.timeSeconds > 0) : (a.timeSeconds > 0);
+            const bCompleted = targetB > 0 ? ((b.reps || b.score || 0) >= targetB || b.timeSeconds > 0) : (b.timeSeconds > 0);
 
             if (aCompleted && !bCompleted) return -1;
             if (!aCompleted && bCompleted) return 1;
@@ -339,16 +418,13 @@
                     timeSeconds: Number(data.timeSeconds || 0),
                     wodType: data.wodType || 'REPS',
                     score: Number(data.score || 0),
-                    maxLoad: Number(data.maxLoad || 0)
+                    maxLoad: Number(data.maxLoad || 0),
+                    category: data.category || 'MM'
                 };
             });
 
-            if (isWod1) {
-                entries.sort((a, b) => {
-                    const tA = a.timeSeconds > 0 ? a.timeSeconds : 999999;
-                    const tB = b.timeSeconds > 0 ? b.timeSeconds : 999999;
-                    return tA - tB;
-                });
+            if (isWod1 || wodName === 'WOD 2') {
+                entries.sort((a, b) => compareForTimeTeams(a, b, wodName));
             } else if (isMaxLoad) {
                 entries.sort((a, b) => b.maxLoad - a.maxLoad);
             } else if (timeWod) {
@@ -364,10 +440,9 @@
             while (i < entries.length) {
                 let j = i;
                 while (j < entries.length) {
-                    if (isWod1) {
-                        const tI = entries[i].timeSeconds > 0 ? entries[i].timeSeconds : 999999;
-                        const tJ = entries[j].timeSeconds > 0 ? entries[j].timeSeconds : 999999;
-                        if (tI === tJ) j++; else break;
+                    if (isWod1 || wodName === 'WOD 2') {
+                        const comp = compareForTimeTeams(entries[j], entries[i], wodName);
+                        if (comp === 0) j++; else break;
                     } else if (isMaxLoad) {
                         if (entries[j].maxLoad === entries[i].maxLoad) j++; else break;
                     } else if (timeWod) {
@@ -423,10 +498,13 @@
             const chartTimes = [];
             const barColors = [];
 
+            const riepilogoSection = document.getElementById('riepilogo-section');
+
             if (activeWod === 'GENERAL') {
                 activeIsWod1 = false;
                 document.getElementById('current-wod-title').innerText = "🏆 CLASSIFICA GENERALE ASSOLUTA";
                 document.getElementById('current-wod-badge').innerText = "Punteggio Totale Punti WOD (Media Pari Merito)";
+                if (riepilogoSection) riepilogoSection.classList.remove('hidden');
 
                 const totals = {};
                 for (let i = 1; i <= 12; i++) {
@@ -450,15 +528,21 @@
                 const maxVal = Math.max(...chartData, 10);
                 scoreChart.options.scales.y.max = Math.ceil((maxVal * 4 / 3) / 5) * 5;
                 scoreChart.options.scales.y.reverse = false;
+                updateAuditTables();
 
             } else {
-                activeIsWod1 = (activeWod === 'WOD 1' || activeWod === 'WOD 2');
+                if (riepilogoSection) riepilogoSection.classList.add('hidden');
+                activeIsWod1 = (activeWod === 'WOD 1');
                 document.getElementById('current-wod-title').innerText = `${activeWod} - Cyber Arena Live`;
-                document.getElementById('current-wod-badge').innerText = (activeWod === 'WOD 1') ? "Corsa - Tempo Max 8 Minuti (480s)" : (activeWod === 'WOD 2') ? "Row For Time - Tempo Max 10 Minuti (600s)" : "Sviluppo in Tempo Reale";
+                document.getElementById('current-wod-badge').innerText =
+                    activeWod === 'WOD 1' ? "Corsa - Tempo Max 8 Minuti (480s)" :
+                    activeWod === 'WOD 2' ? "Row For Time - Metri (Proporzionale MM/MW/WW) & Battaglia Live" :
+                    "Sviluppo in Tempo Reale";
 
                 const wodTeams = allWodsData[activeWod] || {};
                 const isMaxLoad = (activeWod === 'WOD 4');
-                const isWod1Or2 = (activeWod === 'WOD 1' || activeWod === 'WOD 2');
+                const isWod1 = (activeWod === 'WOD 1');
+                const isWod2 = (activeWod === 'WOD 2');
 
                 const teamEntries = Object.keys(wodTeams).map(teamKey => {
                     const data = wodTeams[teamKey];
@@ -469,16 +553,12 @@
                         wodType: data.wodType || 'REPS',
                         score: Number(data.score || 0),
                         maxLoad: Number(data.maxLoad || 0),
-                        category: data.category || ''
+                        category: data.category || 'MM'
                     };
                 });
 
-                if (isWod1Or2) {
-                    teamEntries.sort((a, b) => {
-                        const tA = a.timeSeconds > 0 ? a.timeSeconds : 999999;
-                        const tB = b.timeSeconds > 0 ? b.timeSeconds : 999999;
-                        return tA - tB;
-                    });
+                if (isWod1 || isWod2) {
+                    teamEntries.sort((a, b) => compareForTimeTeams(a, b, activeWod));
                 } else if (isMaxLoad) {
                     teamEntries.sort((a, b) => b.maxLoad - a.maxLoad);
                 } else if (isTimeWod(activeWod)) {
@@ -490,11 +570,15 @@
                 teamEntries.forEach((team, idx) => {
                     chartLabels.push(team.name);
                     let val = 0;
-                    let actualT = 0;
-                    if (isWod1Or2) {
-                        actualT = team.timeSeconds > 0 ? team.timeSeconds : 0;
-                        const cap = activeWod === 'WOD 1' ? 480 : 600;
-                        val = actualT > 0 ? (cap - actualT) : 0;
+                    let actualT = team.timeSeconds > 0 ? team.timeSeconds : 0;
+                    if (isWod1) {
+                        val = actualT > 0 ? (480 - actualT) : 0;
+                    } else if (isWod2) {
+                        let mult = 1.0;
+                        const cat = (team.category || 'MM').toUpperCase();
+                        if (cat === 'MW') mult = 20 / 18;
+                        else if (cat === 'WW') mult = 20 / 16;
+                        val = (team.reps || 0) * mult;
                     } else if (isMaxLoad) {
                         val = team.maxLoad;
                     } else {
@@ -505,8 +589,13 @@
                     barColors.push(teamColors[idx % teamColors.length]);
                 });
 
-                if (isWod1Or2) {
-                    scoreChart.options.scales.y.max = activeWod === 'WOD 1' ? 480 : 600;
+                scoreChart.data.datasets[0].teamEntries = teamEntries;
+
+                if (isWod1) {
+                    scoreChart.options.scales.y.max = 480;
+                    scoreChart.options.scales.y.reverse = false;
+                } else if (isWod2) {
+                    scoreChart.options.scales.y.max = 2800; // Fondoscala a 2800 per WOD 2
                     scoreChart.options.scales.y.reverse = false;
                 } else if (isMaxLoad) {
                     const maxKg = Math.max(...chartData, 100);
